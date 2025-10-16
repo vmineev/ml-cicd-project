@@ -62,10 +62,51 @@ jobs:
     # test Job이 성공해야 실행
     needs: test
 
+    # 권한 설정 추가 (GHCR 푸시용)
+    permissions:
+     contents: read
+     packages: write
+
     steps:
       # 저장소 코드 체크아웃
       - name: Checkout code
         uses: actions/checkout@v3
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v2
+
+      # 짧은 SHA 추출
+      - name: Extract short SHA
+        id: short-sha
+        run: echo "sha=${GITHUB_SHA::7}" >> $GITHUB_OUTPUT
+
+    # 소문자로 변환 (GHCR 요구사항)
+      - name: Set lowercase repository name
+        id: repo-name
+        run: echo "repo=$(echo ${{ github.repository }} | tr '[:upper:]' '[:lower:]')" >> $GITHUB_OUTPUT
+        
+    # GitHub Container Registry 로그인
+      - name: Login to GitHub Container Registry
+        uses: docker/login-action@v2
+        with:
+         registry: ghcr.io
+         username: ${{ github.actor }}
+         password: ${{ secrets.GHCR_TOKEN }}
+
+    # Docker 이미지 빌드 및 푸시
+      - name: Build and push Docker image
+        uses: docker/build-push-action@v4
+        with:
+         context: .
+        # 푸시 활성화
+         push: true
+        # GHCR 이미지 이름
+         tags: |
+          ghcr.io/${{ steps.repo-name.outputs.repo }}:latest
+          ghcr.io/${{ steps.repo-name.outputs.repo }}:${{ steps.short-sha.outputs.sha }}
+        # 빌드 캐시
+         cache-from: type=gha
+         cache-to: type=gha,mode=max     
 
       # Python 3.9 설치
       - name: Set up Python
@@ -97,10 +138,7 @@ jobs:
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v2
 
-      # 짧은 SHA 추출 (앞 7자)
-      - name: Extract short SHA
-        id: short-sha
-        run: echo "sha=${GITHUB_SHA::7}" >> $GITHUB_OUTPUT
+    
 
       # Docker 이미지 빌드
       - name: Build Docker image
@@ -134,4 +172,15 @@ jobs:
           echo "✅ Docker image built successfully"
           echo "Tags:"
           echo "  - ml-server:latest"
-          echo "  - ml-server:${{ steps.short-sha.outputs.sha }}"      
+          echo "  - ml-server:${{ steps.short-sha.outputs.sha }}"
+
+      # 푸시 성공 메시지
+      - name: Image pushed successfully
+        run: |
+         echo "✅ Docker image pushed successfully to GHCR"
+         echo "Registry: ghcr.io"
+         echo "Repository: ${{ steps.repo-name.outputs.repo }}"
+         echo "Tags:"
+         echo "  - latest"
+         echo "  - ${{ steps.short-sha.outputs.sha }}"
+    
