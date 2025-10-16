@@ -17,6 +17,44 @@ jobs:
     # Ubuntu 최신 버전 Runner 사용
     runs-on: ubuntu-latest
 
+    steps:
+      # 저장소 코드 체크아웃
+      - name: Checkout code
+        uses: actions/checkout@v3
+
+      # Python 3.9 설치
+      - name: Set up Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: "3.9"
+
+      # 의존성 캐싱 (선택사항 - 빌드 속도 향상)
+      - name: Cache pip dependencies
+        uses: actions/cache@v3
+        with:
+          path: ~/.cache/pip
+          key: ${{ runner.os }}-pip-${{ hashFiles('requirements.txt') }}
+          restore-keys: |
+            ${{ runner.os }}-pip-
+
+      # 의존성 설치
+      - name: Install dependencies
+        run: |
+          # pip 업그레이드
+          python -m pip install --upgrade pip
+          # requirements.txt의 패키지 설치
+          pip install -r requirements.txt
+          # 테스트용 pytest 설치
+          pip install pytest
+
+      # 테스트 실행
+      - name: Run tests
+        run: |
+          # pytest로 tests/ 디렉토리의 모든 테스트 실행
+          # -v: verbose 모드 (상세한 출력)
+          # PYTHONPATH를 현재 디렉토리로 설정하여 app 모듈을 찾을 수 있도록 함
+          PYTHONPATH=. pytest tests/ -v
+
     # 빌드 Job (새로 추가)
   build:
     # Ubuntu 최신 Runner
