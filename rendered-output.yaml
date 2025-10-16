@@ -1,0 +1,210 @@
+---
+# Source: ml-server-chart/templates/serviceaccount.yaml
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: release-name-ml-server-chart
+  labels:
+    helm.sh/chart: ml-server-chart-0.1.0
+    app.kubernetes.io/name: ml-server-chart
+    app.kubernetes.io/instance: release-name
+    app.kubernetes.io/version: "1.16.0"
+    app.kubernetes.io/managed-by: Helm
+automountServiceAccountToken:
+---
+# Source: ml-server-chart/templates/service.yaml
+# Kubernetes API 버전 및 리소스 종류
+apiVersion: v1
+kind: Service
+
+# 메타데이터 정의
+metadata:
+  # Service 이름
+  name: release-name-ml-server-chart
+
+  labels:
+    helm.sh/chart: ml-server-chart-0.1.0
+    app.kubernetes.io/name: ml-server-chart
+    app.kubernetes.io/instance: release-name
+    app.kubernetes.io/version: "1.16.0"
+    app.kubernetes.io/managed-by: Helm
+
+# Service 스펙
+spec:
+  # Service 타입 (ClusterIP, NodePort, LoadBalancer)
+  type: ClusterIP
+
+  # 포트 설정
+  ports:
+    # Service가 노출할 포트
+    - port: 80
+      # Pod의 타겟 포트
+      targetPort: http
+      # 프로토콜 (TCP, UDP)
+      protocol: TCP
+      # 포트 이름 (여러 포트 사용 시 구분용)
+      name: http
+
+  # Service가 트래픽을 전달할 Pod 선택
+  selector:
+    app.kubernetes.io/name: ml-server-chart
+    app.kubernetes.io/instance: release-name
+---
+# Source: ml-server-chart/templates/deployment.yaml
+# Kubernetes API 버전 및 리소스 종류
+apiVersion: apps/v1
+kind: Deployment
+
+# 메타데이터 정의
+metadata:
+  # Deployment 이름 - Release 이름과 Chart 이름 조합
+  name: release-name-ml-server-chart
+  # Label 설정 - 리소스 식별 및 필터링에 사용
+  labels:
+    helm.sh/chart: ml-server-chart-0.1.0
+    app.kubernetes.io/name: ml-server-chart
+    app.kubernetes.io/instance: release-name
+    app.kubernetes.io/version: "1.16.0"
+    app.kubernetes.io/managed-by: Helm
+
+# Deployment 스펙
+spec:
+  # 레플리카 수 - values.yaml에서 정의한 값 사용
+  replicas: 2
+
+  # Pod 선택자 - 관리할 Pod를 식별
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: ml-server-chart
+      app.kubernetes.io/instance: release-name
+
+  # Pod 템플릿
+  template:
+    metadata:
+      # Pod에 적용할 label
+      labels:
+        app.kubernetes.io/name: ml-server-chart
+        app.kubernetes.io/instance: release-name
+
+    # Pod 스펙
+    spec:
+      # Service Account 지정
+
+      # Service Account 이름 설정
+      serviceAccountName: release-name-ml-server-chart
+
+      # 보안 컨텍스트 (Pod 레벨)
+      securityContext:
+        runAsNonRoot: true  # root 사용자로 실행 금지
+        runAsUser: 1000     # UID 1000으로 실행
+
+      # 컨테이너 정의
+      containers:
+      - name: ml-server-chart
+        # 보안 컨텍스트 (컨테이너 레벨)
+        securityContext:
+          allowPrivilegeEscalation: false  # 권한 상승 금지
+          capabilities:
+            drop:
+            - ALL  # 모든 Linux capability 제거
+
+        # 이미지 지정 - repository와 tag를 조합
+        image: "ml-server:1.0.0"
+        # 이미지 pull 정책
+        imagePullPolicy: IfNotPresent
+
+        # 컨테이너가 노출하는 포트
+        ports:
+        - name: http
+          containerPort: 5000
+          protocol: TCP
+
+        # Liveness Probe 설정
+        livenessProbe:
+          failureThreshold: 3
+          httpGet:
+            path: /health
+            port: 5000
+          initialDelaySeconds: 10
+          periodSeconds: 10
+          timeoutSeconds: 5
+
+        # Readiness Probe 설정
+        readinessProbe:
+          failureThreshold: 3
+          httpGet:
+            path: /health
+            port: 5000
+          initialDelaySeconds: 5
+          periodSeconds: 5
+          timeoutSeconds: 3
+
+        # 리소스 제한
+        resources:
+          limits:
+            cpu: 500m
+            memory: 512Mi
+          requests:
+            cpu: 100m
+            memory: 128Mi
+
+        # 환경 변수 주입
+        env:
+          - name: ENVIRONMENT
+            value: development
+          - name: LOG_LEVEL
+            value: INFO
+
+      # Node Selector - 특정 노드에만 스케줄링
+
+      # Affinity - Pod 배치 선호도
+
+      # Tolerations - 특정 taint 허용
+---
+# Source: ml-server-chart/templates/httproute.yaml
+apiVersion: gateway.networking.k8s.io/v1
+kind: HTTPRoute
+metadata:
+  name: release-name-ml-server-chart
+  labels:
+    helm.sh/chart: ml-server-chart-0.1.0
+    app.kubernetes.io/name: ml-server-chart
+    app.kubernetes.io/instance: release-name
+    app.kubernetes.io/version: "1.16.0"
+    app.kubernetes.io/managed-by: Helm
+spec:
+  parentRefs:
+    - name: my-gateway
+      namespace: default
+  hostnames:
+    - example.local
+  rules:
+    - matches:
+        - path:
+            type: PathPrefix
+            value: /
+      backendRefs:
+        - name: release-name-ml-server-chart
+          port: 80
+          weight: 1
+---
+# Source: ml-server-chart/templates/tests/test-connection.yaml
+apiVersion: v1
+kind: Pod
+metadata:
+  name: "release-name-ml-server-chart-test-connection"
+  labels:
+    helm.sh/chart: ml-server-chart-0.1.0
+    app.kubernetes.io/name: ml-server-chart
+    app.kubernetes.io/instance: release-name
+    app.kubernetes.io/version: "1.16.0"
+    app.kubernetes.io/managed-by: Helm
+  annotations:
+    "helm.sh/hook": test
+spec:
+  containers:
+    - name: wget
+      image: busybox
+      command: ['wget']
+      args: ['release-name-ml-server-chart:80']
+  restartPolicy: Never

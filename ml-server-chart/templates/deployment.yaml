@@ -1,0 +1,108 @@
+# Kubernetes API 버전 및 리소스 종류
+apiVersion: apps/v1
+kind: Deployment
+
+# 메타데이터 정의
+metadata:
+  # Deployment 이름 - Release 이름과 Chart 이름 조합
+  name: {{ include "ml-server-chart.fullname" . }}
+  # Label 설정 - 리소스 식별 및 필터링에 사용
+  labels:
+    {{- include "ml-server-chart.labels" . | nindent 4 }}
+
+# Deployment 스펙
+spec:
+  # 레플리카 수 - values.yaml에서 정의한 값 사용
+  replicas: {{ .Values.replicaCount }}
+
+  # Pod 선택자 - 관리할 Pod를 식별
+  selector:
+    matchLabels:
+      {{- include "ml-server-chart.selectorLabels" . | nindent 6 }}
+
+  # Pod 템플릿
+  template:
+    metadata:
+      # Pod에 적용할 label
+      labels:
+        {{- include "ml-server-chart.selectorLabels" . | nindent 8 }}
+
+    # Pod 스펙
+    spec:
+      # Service Account 지정
+      {{- with .Values.imagePullSecrets }}
+      # private 레지스트리 접근을 위한 secret
+      imagePullSecrets:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+
+      # Service Account 이름 설정
+      serviceAccountName: {{ include "ml-server-chart.serviceAccountName" . }}
+
+      # 보안 컨텍스트 (Pod 레벨)
+      securityContext:
+        runAsNonRoot: true  # root 사용자로 실행 금지
+        runAsUser: 1000     # UID 1000으로 실행
+
+      # 컨테이너 정의
+      containers:
+      - name: {{ .Chart.Name }}
+        # 보안 컨텍스트 (컨테이너 레벨)
+        securityContext:
+          allowPrivilegeEscalation: false  # 권한 상승 금지
+          capabilities:
+            drop:
+            - ALL  # 모든 Linux capability 제거
+
+        # 이미지 지정 - repository와 tag를 조합
+        image: "{{ .Values.image.repository }}:{{ .Values.image.tag | default .Chart.AppVersion }}"
+        # 이미지 pull 정책
+        imagePullPolicy: {{ .Values.image.pullPolicy }}
+
+        # 컨테이너가 노출하는 포트
+        ports:
+        - name: http
+          containerPort: {{ .Values.service.targetPort }}
+          protocol: TCP
+
+        # Liveness Probe 설정
+        {{- if .Values.livenessProbe }}
+        livenessProbe:
+          {{- toYaml .Values.livenessProbe | nindent 10 }}
+        {{- end }}
+
+        # Readiness Probe 설정
+        {{- if .Values.readinessProbe }}
+        readinessProbe:
+          {{- toYaml .Values.readinessProbe | nindent 10 }}
+        {{- end }}
+
+        # 리소스 제한
+        {{- if .Values.resources }}
+        resources:
+          {{- toYaml .Values.resources | nindent 10 }}
+        {{- end }}
+
+        # 환경 변수 주입
+        {{- if .Values.env }}
+        env:
+          {{- toYaml .Values.env | nindent 10 }}
+        {{- end }}
+
+      # Node Selector - 특정 노드에만 스케줄링
+      {{- with .Values.nodeSelector }}
+      nodeSelector:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+
+      # Affinity - Pod 배치 선호도
+      {{- with .Values.affinity }}
+      affinity:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+
+      # Tolerations - 특정 taint 허용
+      {{- with .Values.tolerations }}
+      tolerations:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}

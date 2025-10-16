@@ -1,0 +1,117 @@
+# 레플리카 수 - 동시에 실행될 Pod 개수
+replicaCount: 2
+
+# 이미지 설정
+image:
+  # 이미지 저장소 (실제 환경에서는 ECR 등의 레지스트리 주소)
+  repository: ml-server
+  # 이미지 pull 정책
+  # IfNotPresent → 로컬에 없을 때만 pull
+  # Always → 항상 pull
+  # Never → pull 하지 않음 (로컬 이미지만 사용)
+  pullPolicy: IfNotPresent
+  # 이미지 태그 (빈 값이면 Chart의 appVersion 사용)
+  tag: "1.0.0"
+
+# 이미지 pull secret (private 레지스트리 사용 시)
+imagePullSecrets: []
+
+# Service Account 설정
+serviceAccount:
+  # Service Account 생성 여부
+  create: true
+  # Service Account에 annotation 추가 (AWS IAM Role 연결 등에 사용)
+  annotations: {}
+  # Service Account 이름 (빈 값이면 자동 생성)
+  name: ""
+
+# Service 설정
+service:
+  # Service 타입
+  # ClusterIP → 클러스터 내부에서만 접근 (기본값)
+  # NodePort → 노드의 특정 포트로 외부 접근
+  # LoadBalancer → 클라우드 로드밸런서 생성
+  type: ClusterIP
+  # Service가 노출할 포트
+  port: 80
+  # Pod의 타겟 포트 (애플리케이션이 실행되는 포트)
+  targetPort: 5000
+
+# Ingress 설정
+ingress:
+  # Ingress 리소스 생성 여부
+  enabled: false
+  # Ingress class 지정 (nginx, alb 등)
+  className: ""
+  # Ingress에 추가할 annotation
+  annotations: {}
+  # 호스트 및 경로 설정
+  hosts:
+    - host: ml-server.local
+      paths:
+        - path: /
+          pathType: Prefix
+  # TLS 설정
+  tls: []
+
+# 리소스 제한 설정
+resources:
+  # 최소 요청 리소스 (Pod 스케줄링 시 보장)
+  requests:
+    cpu: 100m # 0.1 CPU 코어
+    memory: 128Mi # 128 메가바이트
+  # 최대 사용 리소스 (초과 시 throttling/OOM)
+  limits:
+    cpu: 500m # 0.5 CPU 코어
+    memory: 512Mi # 512 메가바이트
+
+# 환경 변수 설정
+env:
+  - name: ENVIRONMENT
+    value: "development"
+  - name: LOG_LEVEL
+    value: "INFO"
+
+# Liveness Probe 설정 - Pod가 살아있는지 확인
+livenessProbe:
+  httpGet:
+    path: /health # 헬스체크 경로
+    port: 5000 # 헬스체크 포트
+  initialDelaySeconds: 10 # Pod 시작 후 첫 체크까지 대기 시간
+  periodSeconds: 10 # 체크 주기
+  timeoutSeconds: 5 # 응답 대기 시간
+  failureThreshold: 3 # 연속 실패 횟수 (초과 시 Pod 재시작)
+
+# Readiness Probe 설정 - Pod가 트래픽을 받을 준비가 되었는지 확인
+readinessProbe:
+  httpGet:
+    path: /health
+    port: 5000
+  initialDelaySeconds: 5
+  periodSeconds: 5
+  timeoutSeconds: 3
+  failureThreshold: 3 # 연속 실패 횟수 (초과 시 Service에서 제외)
+
+# Node Selector - 특정 노드에만 Pod 배포
+nodeSelector: {}
+
+# Tolerations - 특정 taint가 있는 노드에도 배포 허용
+tolerations: []
+
+# Affinity - Pod 배포 선호도 설정
+affinity: {}
+
+httpRoute:
+  enabled: true
+  parentRefs:
+    - name: my-gateway
+      namespace: default
+  hostnames:
+    - example.local
+  annotations: {}
+  rules:
+    - matches:
+        - path:
+            type: PathPrefix
+            value: /
+      filters: []
